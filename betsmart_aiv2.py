@@ -12,29 +12,36 @@ BASE_URL = "https://v3.football.api-sports.io"
 st_autorefresh(interval=60000, key="api_timer")  # Se actualiza cada 60 segundos (60000 ms)
 
 # ✅ Calcular el tiempo restante dinámicamente para reinicio de la API
-api_reset_time = datetime.now() + timedelta(hours=8)
+@st.cache_data(ttl=600)  # Se recalcula cada 10 minutos
+def get_api_reset_time():
+    now = datetime.utcnow()
+    reset_hour = (now.hour // 8 + 1) * 8  # Se reinicia cada 8 horas
+    reset_time = datetime(now.year, now.month, now.day, reset_hour, 0, 0)
+    if reset_time < now:
+        reset_time += timedelta(hours=8)
+    return reset_time
 
 def get_remaining_time():
-    return (api_reset_time - datetime.now()).total_seconds()
+    return (get_api_reset_time() - datetime.utcnow()).total_seconds()
 
 # ✅ Función para obtener los partidos del día actual
-@st.cache_data(ttl=28800)  # Caché por 8 horas para optimizar rendimiento
+@st.cache_data(ttl=600)  # Cache de 10 minutos para mejorar rendimiento
 def get_matches():
-    today = datetime.now().strftime("%Y-%m-%d")
-    url = f"{BASE_URL}/fixtures?date={today}&timezone=America/Bogota"
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    url = f"{BASE_URL}/fixtures?date={today}&timezone=UTC"
     headers = {"x-apisports-key": API_KEY}
     
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         data = response.json()
-        if data.get("response"):
-            return data["response"]
+        return data.get("response", [])
     return []
 
 # ✅ Función para obtener cuotas de apuestas
-@st.cache_data(ttl=28800)
+@st.cache_data(ttl=600)
 def get_odds():
-    url = f"{BASE_URL}/odds?bet=1"
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    url = f"{BASE_URL}/odds?date={today}&timezone=UTC"
     headers = {"x-apisports-key": API_KEY}
 
     response = requests.get(url, headers=headers)
